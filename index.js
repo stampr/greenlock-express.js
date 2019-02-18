@@ -46,8 +46,9 @@ module.exports.create = function (opts) {
       console.warn("'" + p + "' doesn't seem to be a valid port number, socket path, or pipe");
     }
 
+    var fallbackHandler = opts.fallbackHandler || require('redirect-https')();
     server = require('http').createServer(
-      greenlock.middleware.sanitizeHost(greenlock.middleware(require('redirect-https')()))
+      greenlock.middleware.sanitizeHost(greenlock.middleware(fallbackHandler))
     );
     httpType = 'http';
 
@@ -145,11 +146,11 @@ module.exports.create = function (opts) {
             console.info("Setting default certificates dynamically requires node v11.0+. Skipping.");
           }
           server._hasDefaultSecureContext = true;
-        }).catch(function (/*e*/) {
+        }).catch(function (e) {
           // this may be that the test.example.com was requested, but it's listed
           // on the cert for demo.example.com which is in its own directory, not the other
-          //console.warn("Unusual error: couldn't get newly authorized certificate:");
-          //console.warn(e.message);
+          console.warn("Unusual error: couldn't get newly authorized certificate:");
+          console.warn(e);
         });
       });
     };
@@ -169,7 +170,8 @@ module.exports.create = function (opts) {
           console.error(e);
           try {
             res.statusCode = 500;
-            res.end("Internal Server Error: [Greenlock] HTTP exception logged for user-provided handler.");
+            console.log("[Greenlock] HTTP exception logged for user-provided handler.");
+            res.end("Internal Server Error");
           } catch(e) {
             // ignore
             // (headers may have already been sent, etc)
