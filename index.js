@@ -7,6 +7,15 @@ try {
   PromiseA = global.Promise;
 }
 
+const _defaultLogger = (...args) => {
+  try {
+    console.log(...args);
+  }
+  catch (err) {
+    console.log('error while logging. this should not happen', err);
+  }
+};
+
 // opts.approveDomains(options, certs, cb)
 module.exports.create = function (opts) {
   // accept all defaults for greenlock.challenges, greenlock.store, greenlock.middleware
@@ -14,6 +23,9 @@ module.exports.create = function (opts) {
     opts._communityPackage = 'greenlock-express.js';
     opts._communityPackageVersion = require('./package.json').version;
   }
+  const logger = !opts.debug ? function(){} : _defaultLogger;
+
+  logger('initializing with options', opts);
 
   function explainError(e) {
     console.error('Error:' + e.message);
@@ -41,6 +53,8 @@ module.exports.create = function (opts) {
     var server;
     var validHttpPort = (parseInt(p, 10) >= 0);
 
+    logger('creating insecure server', { plainPort, parts, p, addr, validHttpPort });
+
     if (addr) { args[1] = addr; }
     if (!validHttpPort && !/(\/)|(\\\\)/.test(p)) {
       console.warn("'" + p + "' doesn't seem to be a valid port number, socket path, or pipe");
@@ -48,7 +62,10 @@ module.exports.create = function (opts) {
 
     var fallbackHandler = opts.fallbackHandler || require('redirect-https')();
     server = require('http').createServer(
-      greenlock.middleware.sanitizeHost(greenlock.middleware(fallbackHandler))
+      greenlock.middleware.sanitizeHost((req, res) => {
+        logger('insecure server received request', { req: req.toJSON() });
+        greenlock.middleware(fallbackHandler)(req, res);
+      })
     );
     httpType = 'http';
 
@@ -110,6 +127,8 @@ module.exports.create = function (opts) {
     var server;
     var validHttpPort = (parseInt(p, 10) >= 0);
 
+    logger('creating secure server', { port, parts, p, addr, validHttpPort });
+
     if (addr) { args[1] = addr; }
     if (!validHttpPort && !/(\/)|(\\\\)/.test(p)) {
       console.warn("'" + p + "' doesn't seem to be a valid port number, socket path, or pipe");
@@ -163,6 +182,7 @@ module.exports.create = function (opts) {
     server = https.createServer(
       greenlock.tlsOptions
     , greenlock.middleware.sanitizeHost(function (req, res) {
+        logger('secure server received request', { req: req.toJSON() });
         try {
           greenlock.app(req, res);
         } catch(e) {
@@ -220,7 +240,10 @@ module.exports.create = function (opts) {
     plainServer = obj1.server;
     server = obj2.server;
 
+    logger('servers created', { plainPort, port });
+
     server.then = obj1.listen().then(function (tlsOptions) {
+      logger('secure server ready');
       if (tlsOptions) {
         if (server.setSecureContext) {
           // only available in node v11.0+
@@ -232,6 +255,7 @@ module.exports.create = function (opts) {
         server._hasDefaultSecureContext = true;
       }
       return obj2.listen().then(function () {
+        logger('insecure server ready');
         // Report plain http status
         if ('function' === typeof fnPlain) {
           fnPlain.apply(plainServer);
