@@ -16,6 +16,11 @@ const _defaultLogger = (...args) => {
   }
 };
 
+const _reqToJson = req => {
+  const { statusCode, headers, body } = req;
+  return { statusCode, headers, bodyExists: !!body };
+};
+
 // opts.approveDomains(options, certs, cb)
 module.exports.create = function (opts) {
   // accept all defaults for greenlock.challenges, greenlock.store, greenlock.middleware
@@ -63,7 +68,7 @@ module.exports.create = function (opts) {
     var fallbackHandler = opts.fallbackHandler || require('redirect-https')();
     server = require('http').createServer(
       greenlock.middleware.sanitizeHost((req, res) => {
-        logger('insecure server received request', { req: req.toJSON() });
+        logger('insecure server received request', { req: _reqToJson(req) });
         greenlock.middleware(fallbackHandler)(req, res);
       })
     );
@@ -182,7 +187,7 @@ module.exports.create = function (opts) {
     server = https.createServer(
       greenlock.tlsOptions
     , greenlock.middleware.sanitizeHost(function (req, res) {
-        logger('secure server received request', { req: req.toJSON() });
+        logger('secure server received request', { req: _reqToJson(req) });
         try {
           greenlock.app(req, res);
         } catch(e) {
